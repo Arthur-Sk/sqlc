@@ -12,16 +12,18 @@ import (
 )
 
 const selectAll = `-- name: SelectAll :many
-SELECT test_id, test_date, test_time, test_string, test_varchar, test_double FROM public.get_test()
+SELECT test_id, test_date, test_time, test_string, test_varchar, test_double, test_jsonb, test_jsonb_domain FROM public.get_test()
 `
 
 type SelectAllRow struct {
-	TestID      pgtype.Int4
-	TestDate    pgtype.Date
-	TestTime    pgtype.Timestamptz
-	TestString  pgtype.Text
-	TestVarchar interface{}
-	TestDouble  pgtype.Float8
+	TestID          pgtype.Int4
+	TestDate        pgtype.Date
+	TestTime        pgtype.Timestamptz
+	TestString      pgtype.Text
+	TestVarchar     pgtype.Text
+	TestDouble      pgtype.Float8
+	TestJsonb       TestJsonb
+	TestJsonbDomain TestJsonbDomain
 }
 
 func (q *Queries) SelectAll(ctx context.Context) ([]SelectAllRow, error) {
@@ -40,6 +42,8 @@ func (q *Queries) SelectAll(ctx context.Context) ([]SelectAllRow, error) {
 			&i.TestString,
 			&i.TestVarchar,
 			&i.TestDouble,
+			&i.TestJsonb,
+			&i.TestJsonbDomain,
 		); err != nil {
 			return nil, err
 		}
@@ -52,16 +56,18 @@ func (q *Queries) SelectAll(ctx context.Context) ([]SelectAllRow, error) {
 }
 
 const selectWithTime = `-- name: SelectWithTime :many
-SELECT test_id, test_date, test_time, test_string, test_varchar, test_double FROM public.get_test($1::timestamp)
+SELECT test_id, test_date, test_time, test_string, test_varchar, test_double, test_jsonb, test_jsonb_domain FROM public.get_test($1::timestamp)
 `
 
 type SelectWithTimeRow struct {
-	TestID      pgtype.Int4
-	TestDate    pgtype.Date
-	TestTime    pgtype.Timestamptz
-	TestString  pgtype.Text
-	TestVarchar interface{}
-	TestDouble  pgtype.Float8
+	TestID          pgtype.Int4
+	TestDate        pgtype.Date
+	TestTime        pgtype.Timestamptz
+	TestString      pgtype.Text
+	TestVarchar     pgtype.Text
+	TestDouble      pgtype.Float8
+	TestJsonb       TestJsonb
+	TestJsonbDomain TestJsonbDomain
 }
 
 func (q *Queries) SelectWithTime(ctx context.Context, dollar_1 pgtype.Timestamp) ([]SelectWithTimeRow, error) {
@@ -80,6 +86,8 @@ func (q *Queries) SelectWithTime(ctx context.Context, dollar_1 pgtype.Timestamp)
 			&i.TestString,
 			&i.TestVarchar,
 			&i.TestDouble,
+			&i.TestJsonb,
+			&i.TestJsonbDomain,
 		); err != nil {
 			return nil, err
 		}

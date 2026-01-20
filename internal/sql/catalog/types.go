@@ -39,6 +39,20 @@ func (ct *CompositeType) SetComment(c string) {
 	ct.Comment = c
 }
 
+// Domain represents a PostgreSQL domain type created with CREATE DOMAIN
+type Domain struct {
+	Name    string
+	Type    *ast.TypeName // The underlying type
+	Comment string
+}
+
+func (d *Domain) isType() {
+}
+
+func (d *Domain) SetComment(c string) {
+	d.Comment = c
+}
+
 func sameType(a, b *ast.TypeName) bool {
 	if a.Catalog != b.Catalog {
 		return false
@@ -113,6 +127,34 @@ func (c *Catalog) getType(rel *ast.TypeName) (Type, int, error) {
 	return s.getType(rel)
 }
 
+// ResolveType resolves an unqualified type name to its fully-qualified form
+// by looking up the type in the catalog. If the type is found, the returned
+// TypeName will have the Schema field set.
+func (c *Catalog) ResolveType(rel *ast.TypeName) *ast.TypeName {
+	if rel == nil {
+		return rel
+	}
+	// If schema is already set, return as-is
+	if rel.Schema != "" {
+		return rel
+	}
+	// Try to find the type in the default schema
+	ns := c.DefaultSchema
+	s, err := c.getSchema(ns)
+	if err != nil {
+		return rel
+	}
+	// Check if the type exists in this schema
+	if _, _, err := s.getType(rel); err == nil {
+		return &ast.TypeName{
+			Catalog: rel.Catalog,
+			Schema:  ns,
+			Name:    rel.Name,
+		}
+	}
+	return rel
+}
+
 func (c *Catalog) createCompositeType(stmt *ast.CompositeTypeStmt) error {
 	ns := stmt.TypeName.Schema
 	if ns == "" {
@@ -137,6 +179,44 @@ func (c *Catalog) createCompositeType(stmt *ast.CompositeTypeStmt) error {
 	}
 	schema.Types = append(schema.Types, &CompositeType{
 		Name: stmt.TypeName.Name,
+	})
+	return nil
+}
+
+func (c *Catalog) createDomain(stmt *ast.CreateDomainStmt) error {
+	// Extract domain name from the Domainname list
+	var ns, name string
+	switch len(stmt.Domainname.Items) {
+	case 1:
+		name = stmt.Domainname.Items[0].(*ast.String).Str
+		ns = c.DefaultSchema
+	case 2:
+		ns = stmt.Domainname.Items[0].(*ast.String).Str
+		name = stmt.Domainname.Items[1].(*ast.String).Str
+	default:
+		return fmt.Errorf("invalid domain name")
+	}
+
+	schema, err := c.getSchema(ns)
+	if err != nil {
+		return err
+	}
+
+	// Check for existing table with same name
+	tbl := &ast.TableName{Name: name}
+	if _, _, err := schema.getTable(tbl); err == nil {
+		return sqlerr.RelationExists(name)
+	}
+
+	// Check for existing type with same name
+	typeName := &ast.TypeName{Name: name}
+	if _, _, err := schema.getType(typeName); err == nil {
+		return sqlerr.TypeExists(name)
+	}
+
+	schema.Types = append(schema.Types, &Domain{
+		Name: name,
+		Type: stmt.TypeName,
 	})
 	return nil
 }
