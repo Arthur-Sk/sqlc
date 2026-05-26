@@ -1,0 +1,29 @@
+{
+  "version": "1",
+  "packages": [
+    {
+      "path": "go",
+      "engine": "postgresql",
+      "sql_package": "pgx/v5",
+      "name": "querytest",
+      "schema": "schema.sql",
+      "queries": "query.sql",
+      "overrides": [
+        {
+          "db_type": "public.test_jsonb",
+          "go_type": {
+            "type": "TestJsonb"
+          },
+          "nullable": true
+        },
+        {
+          "db_type": "public.test_jsonb_domain",
+          "go_type": {
+            "type": "TestJsonbDomain"
+          },
+          "nullable": false
+        }
+      ]
+    }
+  ]
+}

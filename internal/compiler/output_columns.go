@@ -59,6 +59,25 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 
 	targets := &ast.List{}
 	switch n := node.(type) {
+	case *ast.CallStmt:
+		fun, err := qc.catalog.ResolveFuncCall(n.FuncCall)
+		if err != nil {
+			return nil, err
+		}
+		var cols []*Column
+		for _, arg := range fun.Args {
+			if arg.Mode == ast.FuncParamOut || arg.Mode == ast.FuncParamInOut || arg.Mode == ast.FuncParamTable {
+				name := arg.Name
+				typeName := arg.Type.Name
+				if arg.Type.Names != nil && len(arg.Type.Names.Items) > 0 {
+					typeName = astutils.Join(arg.Type.Names, ".")
+				} else if arg.Type.Schema != "" {
+					typeName = arg.Type.Schema + "." + arg.Type.Name
+				}
+				cols = append(cols, &Column{Name: name, DataType: typeName, NotNull: false})
+			}
+		}
+		return cols, nil
 	case *ast.DeleteStmt:
 		targets = n.ReturningList
 	case *ast.InsertStmt:
@@ -110,9 +129,32 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 		}
 
 		// For UNION queries, targets is empty and we need to look for the
-		// columns in Largs.
+		// columns in Largs. We also walk Rarg to merge per-column nullability:
+		// SQL semantics — a column in the result is non-nullable only when
+		// every contributing leg's column is non-nullable. Without this merge
+		// the right leg's nullable values would be silently scanned into a
+		// non-nullable Go type and fail at scan time.
 		if isUnion {
-			return c.outputColumns(qc, n.Larg)
+			leftCols, err := c.outputColumns(qc, n.Larg)
+			if err != nil {
+				return nil, err
+			}
+			if n.Rarg == nil {
+				return leftCols, nil
+			}
+			rightCols, err := c.outputColumns(qc, n.Rarg)
+			if err != nil {
+				return nil, err
+			}
+			for i := range leftCols {
+				if i >= len(rightCols) {
+					break
+				}
+				if !rightCols[i].NotNull {
+					leftCols[i].NotNull = false
+				}
+			}
+			return leftCols, nil
 		}
 	case *ast.UpdateStmt:
 		targets = n.ReturningList
@@ -575,17 +617,20 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 					}
 					if len(fn.Outs) > 0 {
 						for _, arg := range fn.Outs {
+							resolvedType := qc.ResolveType(arg.Type)
 							table.Columns = append(table.Columns, &Column{
 								Name:     arg.Name,
-								DataType: arg.Type.Name,
+								DataType: resolvedType.Name,
+								Type:     resolvedType,
 							})
 						}
-					}
-					if fn.ReturnType != nil {
+					} else if fn.ReturnType != nil {
+						resolvedType := qc.ResolveType(fn.ReturnType)
 						table.Columns = []*Column{
 							{
 								Name:     colName,
-								DataType: fn.ReturnType.Name,
+								DataType: resolvedType.Name,
+								Type:     resolvedType,
 							},
 						}
 					}
