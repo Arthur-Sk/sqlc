@@ -11,6 +11,22 @@ import (
 	"github.com/sqlc-dev/sqlc/internal/sql/sqlerr"
 )
 
+// columnFromFuncType builds a Column for a function output argument or
+// return type. Type is only attached when ResolveType actually qualified
+// the type (Schema is non-empty), which happens for user-defined types
+// (enum / composite / domain). For built-in types ResolveType returns the
+// input unchanged; in that case leave Type nil so the analyzer's rewritten
+// DataType (e.g. "pg_catalog.timestamptz") is used by pluginQueryColumn
+// instead of being shadowed by the raw "timestamp with time zone".
+func columnFromFuncType(qc *QueryCatalog, name string, typ *ast.TypeName) *Column {
+	resolved := qc.ResolveType(typ)
+	col := &Column{Name: name, DataType: resolved.Name}
+	if resolved.Schema != "" {
+		col.Type = resolved
+	}
+	return col
+}
+
 // OutputColumns determines which columns a statement will output
 func (c *Compiler) OutputColumns(stmt ast.Node) ([]*catalog.Column, error) {
 	qc, err := c.buildQueryCatalog(c.catalog, stmt, nil)
@@ -617,21 +633,11 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 					}
 					if len(fn.Outs) > 0 {
 						for _, arg := range fn.Outs {
-							resolvedType := qc.ResolveType(arg.Type)
-							table.Columns = append(table.Columns, &Column{
-								Name:     arg.Name,
-								DataType: resolvedType.Name,
-								Type:     resolvedType,
-							})
+							table.Columns = append(table.Columns, columnFromFuncType(qc, arg.Name, arg.Type))
 						}
 					} else if fn.ReturnType != nil {
-						resolvedType := qc.ResolveType(fn.ReturnType)
 						table.Columns = []*Column{
-							{
-								Name:     colName,
-								DataType: resolvedType.Name,
-								Type:     resolvedType,
-							},
+							columnFromFuncType(qc, colName, fn.ReturnType),
 						}
 					}
 				}

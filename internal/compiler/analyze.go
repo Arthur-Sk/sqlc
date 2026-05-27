@@ -85,10 +85,6 @@ func combineAnalysis(prev *analysis, a *analyzer.Analysis) *analysis {
 				prev.Columns[i].DataType = cols[i].DataType
 				prev.Columns[i].IsArray = cols[i].IsArray
 				prev.Columns[i].ArrayDims = cols[i].ArrayDims
-				// The analyzer doesn't populate Type for non-table fields,
-				// and a stale Type from the catalog-based inference would
-				// shadow the rewritten DataType in pluginQueryColumn.
-				prev.Columns[i].Type = cols[i].Type
 			}
 		}
 	} else {
