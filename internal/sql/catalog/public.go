@@ -147,8 +147,10 @@ func (c *Catalog) ResolveFuncCall(call *ast.FuncCall) (*Function, error) {
 
 		// Validate OUT placeholders. These are only valid in procedure calls.
 		// For normal function invocation, callers cannot pass values for OUT params.
+		// For variadic functions, any positional arguments beyond len(inArgs)
+		// belong to the trailing variadic IN parameter, not to OUT placeholders.
 		posOut := 0
-		if len(positional) > len(inArgs) {
+		if !variadic && len(positional) > len(inArgs) {
 			posOut = len(positional) - len(inArgs)
 		}
 		outProvided := posOut + namedOut
@@ -175,7 +177,7 @@ func (c *Catalog) ResolveFuncCall(call *ast.FuncCall) (*Function, error) {
 
 	return nil, &sqlerr.Error{
 		Code:     "42883",
-		Message:  fmt.Sprintf("CODE 42883: function %s(%s) does not exist", call.Func.Name, strings.Join(sig, ", ")),
+		Message:  fmt.Sprintf("function %s(%s) does not exist", call.Func.Name, strings.Join(sig, ", ")),
 		Location: call.Pos(),
 		// Hint: "No function matches the given name and argument types. You might need to add explicit type casts.",
 	}

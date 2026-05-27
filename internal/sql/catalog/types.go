@@ -353,6 +353,10 @@ func (c *Catalog) alterTypeSetSchema(stmt *ast.AlterTypeSetSchemaStmt) error {
 		return err
 	}
 	oldType := *stmt.Type
+	// Columns may be stored with either the bare type name (Schema="") or
+	// fully-qualified after defineColumn resolves the schema. Try both.
+	oldTypeResolved := oldType
+	oldTypeResolved.Schema = ns
 	stmt.Type.Schema = *stmt.NewSchema
 	newSchema, err := c.getSchema(*stmt.NewSchema)
 	if err != nil {
@@ -378,7 +382,7 @@ func (c *Catalog) alterTypeSetSchema(stmt *ast.AlterTypeSetSchemaStmt) error {
 	for _, schema := range c.Schemas {
 		for _, table := range schema.Tables {
 			for _, column := range table.Columns {
-				if column.Type == oldType {
+				if column.Type == oldType || column.Type == oldTypeResolved {
 					column.Type.Schema = *stmt.NewSchema
 				}
 			}
@@ -457,11 +461,16 @@ func (c *Catalog) renameType(stmt *ast.RenameTypeStmt) error {
 
 	}
 
-	// Update all the table columns with the new type
+	// Update all the table columns with the new type. Columns may be
+	// stored with either the bare type name (Schema="") or fully-qualified
+	// after defineColumn resolves the schema.
+	oldType := *stmt.Type
+	oldTypeResolved := oldType
+	oldTypeResolved.Schema = ns
 	for _, schema := range c.Schemas {
 		for _, table := range schema.Tables {
 			for _, column := range table.Columns {
-				if column.Type == *stmt.Type {
+				if column.Type == oldType || column.Type == oldTypeResolved {
 					column.Type.Name = newName
 				}
 			}

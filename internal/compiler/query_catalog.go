@@ -32,6 +32,23 @@ func (comp *Compiler) buildQueryCatalog(c *catalog.Catalog, node ast.Node, embed
 	if with != nil {
 		for _, item := range with.Ctes.Items {
 			if cte, ok := item.(*ast.CommonTableExpr); ok {
+				// For recursive CTEs, the body references the CTE name in the
+				// right arm of a UNION. Register the CTE up front using the
+				// non-recursive (left) arm's columns so that lookups during
+				// analysis of the recursive arm resolve to a known table.
+				if with.Recursive {
+					if sel, ok := cte.Ctequery.(*ast.SelectStmt); ok && sel.Larg != nil {
+						baseCols, err := comp.outputColumns(qc, sel.Larg)
+						if err != nil {
+							return nil, err
+						}
+						baseRel := &ast.TableName{Name: *cte.Ctename}
+						for i := range baseCols {
+							baseCols[i].Table = baseRel
+						}
+						qc.ctes[*cte.Ctename] = &Table{Rel: baseRel, Columns: baseCols}
+					}
+				}
 				cols, err := comp.outputColumns(qc, cte.Ctequery)
 				if err != nil {
 					return nil, err

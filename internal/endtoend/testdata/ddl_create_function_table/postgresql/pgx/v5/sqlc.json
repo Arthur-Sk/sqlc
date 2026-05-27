@@ -21,7 +21,7 @@
           "go_type": {
             "type": "TestJsonbDomain"
           },
-          "nullable": false
+          "nullable": true
         }
       ]
     }

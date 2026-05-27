@@ -79,7 +79,8 @@ func (o *Override) Matches(n *plugin.Identifier, defaultSchema string) bool {
 
 func (o *Override) MatchesColumn(col *plugin.Column) bool {
 	columnType := sdk.DataType(col.Type)
-	return o.DBType != "" && o.DBType == columnType && o.Unsigned == col.Unsigned
+	notNull := col.NotNull || col.IsArray
+	return o.DBType != "" && o.DBType == columnType && o.Nullable != notNull && o.Unsigned == col.Unsigned
 }
 
 func (o *Override) parse(req *plugin.GenerateRequest) (err error) {
